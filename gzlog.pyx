@@ -1,5 +1,3 @@
-# cython: linetrace=True
-
 cimport cgzlog
 
 cdef class Gzlog:

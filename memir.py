@@ -71,8 +71,9 @@ class GzipJSONHandler(Handler):
         self.fp = gzlog.Gzlog(filename)
 
     def log(self, entry):
-        json.dump(entry, self.fp)
-        self.fp.write('\n')
+        # json.dump makes 9 write calls, which has too much overhead
+        data = '{}\n'.format(json.dumps(entry))
+        self.fp.write(data)
 
     def __del__(self):
         fp = getattr(self, 'fp', None)
