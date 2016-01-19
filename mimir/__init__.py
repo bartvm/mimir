@@ -11,7 +11,7 @@ import zmq
 from cytoolz.dicttoolz import keyfilter
 from six import iteritems
 
-import gzlog
+from . import gzlog
 
 
 class Log(object):
