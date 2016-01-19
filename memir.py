@@ -62,6 +62,7 @@ class JSONHandler(Handler):
 
     def log(self, entry):
         json.dump(entry, self.fp)
+        self.fp.write('\n')
 
 
 class GzipJSONHandler(Handler):
@@ -71,6 +72,7 @@ class GzipJSONHandler(Handler):
 
     def log(self, entry):
         json.dump(entry, self.fp)
+        self.fp.write('\n')
 
     def __del__(self):
         fp = getattr(self, 'fp', None)

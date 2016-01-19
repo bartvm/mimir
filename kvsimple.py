@@ -5,6 +5,7 @@ kvsimple - simple key-value message class for example applications
 Author: Min RK <benjaminrk@gmail.com>
 
 """
+from __future__ import print_function
 
 import struct # for packing integers
 import sys
@@ -57,18 +58,18 @@ class KVMsg(object):
         else:
             size = len(self.body)
             data=repr(self.body)
-        print >> sys.stderr, "[seq:{seq}][key:{key}][size:{size}] {data}".format(
+        print("[seq:{seq}][key:{key}][size:{size}] {data}".format(
             seq=self.sequence,
             key=self.key,
             size=size,
             data=data,
-        )
+        ), file=sys.stderr)
 
 # ---------------------------------------------------------------------
 # Runs self test of class
 
 def test_kvmsg (verbose):
-    print " * kvmsg: ",
+    print(" * kvmsg: ", end='')
 
     # Prepare our context and sockets
     ctx = zmq.Context()
@@ -95,7 +96,7 @@ def test_kvmsg (verbose):
 
     assert len(kvmap) == 1 # shouldn't be different
 
-    print "OK"
+    print("OK")
 
 if __name__ == '__main__':
     test_kvmsg('-v' in sys.argv)
