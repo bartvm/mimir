@@ -4,80 +4,224 @@ import binascii
 import os
 import sys
 import threading
-from collections import Callable
 
 import simplejson as json
 import zmq
-from cytoolz.dicttoolz import keyfilter
 from six import iteritems
 
 from . import gzlog
 
 
-class Log(object):
-    def __init__(self):
-        self.handlers = []
+def simple_formatter(entry, file, indent=0):
+    """Called with the entry and the file to write to."""
+    for key, value in iteritems(entry):
+        print('  ' * indent + str(key), file=file)
+        if isinstance(value, dict):
+            simple_formatter(value, file, indent + 1)
+        else:
+            print('  ' * (indent + 1) + str(value), file=file)
 
-    def add_handler(self, handler):
-        self.handlers.append(handler)
+
+def Logger(filename=None, stream=False, persistent=True,
+           formatter=simple_formatter):
+    """A pseudo-class for easy initialization of a log.
+
+    Parameters
+    ----------
+    filename : str
+        The file to save the log to in newline delimited JSON format. If
+        the filename ends in `.gz` it will be compressed on the fly.
+    stream : bool
+        If `True`, log entries will be published over a ZeroMQ socket.
+        Defaults to `False`.
+    persistent : bool
+        Whether the log shoud keep entries in memory so that clients of the
+        streaming interface can request all data. Ignored when `stream` is
+        `False`, defaults to `True`. Should be disabled for long-running
+        experiments or very large logs in order to save memory.
+    formatter : function
+        A formatter function that determines how log entries will be
+        printed. If `None`, entries will not be printed to stdout.
+        Defaults to :func:`simple_formatter`.
+
+    Returns
+    -------
+    :class:`_Logger`
+        A logger object with the correct handlers.
+
+    """
+    handlers = []
+    if filename:
+        root, ext = os.path.splitext(filename)
+        # If the file ends in .gz then gzip it
+        if ext == '.gz':
+            handlers.append(GzipJSONHandler(root))
+        else:
+            # TODO codecs open?
+            handlers.append(JSONHandler(open(filename, 'w')))
+    if formatter:
+        handlers.append(PrintHandler(formatter))
+    if stream:
+        if persistent:
+            handlers.append(PersistentServerHandler())
+        else:
+            handlers.append(ServerHandler())
+    return _Logger(handlers)
+
+
+class _Logger(object):
+    """A logger object.
+
+    Parameters
+    ----------
+    handlers : list
+        A list of :class:`Handler` objects, each of which will be called in
+        the given order.
+
+    Attributes
+    ----------
+    handlers : list
+        The list of handlers, which can be appended to and removed from as
+        needed.
+
+    """
+    def __init__(self, handlers=None):
+        if not handlers:
+            handlers = []
+        self.handlers = handlers
 
     def log(self, entry):
+        """Log an entry.
+
+        Will check if the handler contains filters and apply them if needed
+        (so that if multiple handlers have the same filters, they are only
+        applied once). Likewise, it will check if the log entry needs to be
+        serialized to JSON data.
+
+        Parameters
+        ----------
+        entry : dict
+            A log entry is a (JSON-compatible) dict.
+
+        """
+        # For each set of filters, we store the JSON serialized entry
+        filtered_entries = {}
+        serialized_entries = {}
         for handler in self.handlers:
-            handler.log(entry)
+            filters = frozenset(handler.filters)
+
+            # If the content needs to be filtered, do so
+            if filters:
+                if filters not in filtered_entries:
+                    filtered_entries[filters] = handler.filter(entry)
+                filtered_entry = filtered_entries[filters]
+            else:
+                filtered_entry = entry
+
+            # If the handler wants JSON data, give it
+            if handler.JSON:
+                if filters not in serialized_entries:
+                    serialized_entries[filters] = json.dumps(filtered_entry)
+                serialized_entry = serialized_entries[filters]
+                handler.log(serialized_entry)
+            else:
+                handler.log(filtered_entry)
 
 
 class Handler(object):
-    pass
+    """Handlers deal with logging requests.
+
+    Attributes
+    ----------
+    JSON : bool
+        If `True`, this handler will receive JSON-serialized data, if
+        `False` the original (but filtered) entry will be received instead.
+        This allows JSON serialization to be done only once.
+
+    """
+    JSON = False
+
+    def __init__(self, filters=None):
+        if not filters:
+            filters = []
+        self.filters = filters
+
+    def filter(self, entry):
+        for filter in self.filters:
+            entry = filter(entry)
 
 
-class SimpleHandler(Handler):
-    """Prints keys and their values with an optional filter."""
-    def __init__(self, key_predicate=None, file=sys.stdout, padding='  '):
-        if key_predicate and not isinstance(key_predicate, Callable):
-            raise ValueError('key_predicate is not callable')
-        self.key_predicate = key_predicate
+class PrintHandler(Handler):
+    """Prints entries to a file.
+
+    Parameters
+    ----------
+    formatter : callable
+        A callable that takes two arguments, a log entry (`dict`) and a
+        file-like descriptor (object with `.write()` method). The callable
+        is expected to write a text-formatted version of the log entry to
+        this file.
+    file : fileobj
+        A file-like object to write to. Defaults to `sys.stdout`.
+
+    """
+    def __init__(self, formatter=simple_formatter, file=sys.stdout, **kwargs):
+        super(PrintHandler, self).__init__(**kwargs)
         self.file = file
-        self.padding = padding
+        self.formatter = formatter
 
     def log(self, entry):
-        def pretty(d, indent=0):
-            if self.key_predicate:
-                d = keyfilter(self.key_predicate, d)
-            for key, value in iteritems(d):
-                print('{0}{1}'.format(self.padding * indent, key),
-                      file=self.file)
-                if isinstance(value, dict):
-                    pretty(value, indent + 1)
-                else:
-                    print('{0}{1}'.format(self.padding * (indent + 1), value),
-                          file=self.file)
-        pretty(entry)
-        return entry
+        self.formatter(entry, self.file)
 
 
 class JSONHandler(Handler):
-    """Writes entries as JSON objects to a file"""
-    def __init__(self, fp):
+    """Writes entries as JSON objects to a file.
+
+    Parameters
+    ----------
+    fp : fileobj
+        A file-like object (with the `.write()` method) to write the
+        line-delimited JSON formatted log to.
+
+    """
+    JSON = True
+
+    def __init__(self, fp, **kwargs):
+        super(JSONHandler, self).__init__(**kwargs)
         self.fp = fp
 
     def log(self, entry):
-        json.dump(entry, self.fp)
+        self.fp.write(entry)
         self.fp.write('\n')
 
 
 class GzipJSONHandler(Handler):
-    """Writes entries to a GZipped JSON file robustly"""
-    # https://github.com/madler/zlib/blob/master/examples/gzlog.c
-    def __init__(self, filename):
+    """Writes entries to a GZipped JSON file robustly.
+
+    Uses the `gzlog`_ example from `zlib`.
+
+    Parameters
+    ----------
+    filename : str
+        The filename (without `.gz` extension) to save the compressed log
+        to.
+
+    .. _gzlog:
+       https://github.com/madler/zlib/blob/master/examples/gzlog.c
+
+    """
+    JSON = True
+
+    def __init__(self, filename, **kwargs):
+        super(GzipJSONHandler, self).__init__(**kwargs)
         self.fp = gzlog.Gzlog(filename)
 
     def log(self, entry):
-        # json.dump makes 9 write calls, which has too much overhead
-        # so we construct a single string and write that instead
-        data = '{}\n'.format(json.dumps(entry))
+        data = entry + '\n'
         self.fp.write(data)
 
     def __del__(self):
+        """Tries to ensure that `.close()` is called on the gzipped log."""
         fp = getattr(self, 'fp', None)
         if fp:
             fp.close()
@@ -85,8 +229,11 @@ class GzipJSONHandler(Handler):
 
 class ServerHandler(Handler):
     """Streams updates over TCP."""
+    JSON = True
+
     # http://zguide.zeromq.org/py:clonesrv1
-    def __init__(self, port=5557):
+    def __init__(self, port=5557, **kwargs):
+        super(ServerHandler, self).__init__(**kwargs)
         self.ctx = zmq.Context()
         self.sequence = 0
         self.publisher = self.ctx.socket(zmq.PUB)
@@ -106,8 +253,10 @@ class ServerHandler(Handler):
 class PersistentServerHandler(ServerHandler):
     """Publishes updates over TCP but allows clients to catch up."""
     # http://zguide.zeromq.org/py:clonesrv2
-    def __init__(self, push_port=5557, router_port=5556):
-        super(PersistentServerHandler, self).__init__(port=push_port)
+    JSON = True
+
+    def __init__(self, push_port=5557, router_port=5556, **kwargs):
+        super(PersistentServerHandler, self).__init__(port=push_port, **kwargs)
 
         # Set up IPC and start a thread
         self.updates, peer = zpipe(self.ctx)

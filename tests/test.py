@@ -1,17 +1,15 @@
 import time
-from mimir import (Log, SimpleHandler, JSONHandler,
+from mimir import (Logger, PrintHandler, JSONHandler,
                    GzipJSONHandler, PersistentServerHandler)
 
-log = Log()
-log.add_handler(SimpleHandler())
+logger = Logger()
 
 json_log = open('log.json', 'w')
-log.add_handler(JSONHandler(json_log))
-
-log.add_handler(GzipJSONHandler('log.json'))
-
-log.add_handler(PersistentServerHandler())
+logger.handlers = [PrintHandler(),
+                   JSONHandler(json_log),
+                   GzipJSONHandler('log.json'),
+                   PersistentServerHandler()]
 
 for i in range(25):
-    log.log({'this': 'is', 'a': 'test'})
+    logger.log({'iteration': i, 'training_error': 1. / (i + 1)})
     time.sleep(1)
