@@ -10,6 +10,6 @@ logger.handlers = [PrintHandler(),
                    GzipJSONHandler('log.json'),
                    PersistentServerHandler()]
 
-for i in range(25):
+for i in range(2500):
     logger.log({'iteration': i, 'training_error': 1. / (i + 1)})
     time.sleep(1)
