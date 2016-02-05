@@ -4,6 +4,8 @@ import binascii
 import os
 import sys
 import threading
+from collections import deque
+from collections.abc import Sequence
 
 import simplejson as json
 import zmq
@@ -23,7 +25,7 @@ def simple_formatter(entry, file, indent=0):
 
 
 def Logger(filename=None, stream=False, persistent=True,
-           formatter=simple_formatter):
+           formatter=simple_formatter, maxlen=0):
     """A pseudo-class for easy initialization of a log.
 
     Parameters
@@ -43,6 +45,8 @@ def Logger(filename=None, stream=False, persistent=True,
         A formatter function that determines how log entries will be
         printed to standard output. If `None`, entries will not be printed
         at all. Defaults to :func:`simple_formatter`.
+    maxlen : int
+        See :class:`_Logger`'s `maxlen` argument.
 
     Returns
     -------
@@ -66,10 +70,10 @@ def Logger(filename=None, stream=False, persistent=True,
             handlers.append(PersistentServerHandler())
         else:
             handlers.append(ServerHandler())
-    return _Logger(handlers)
+    return _Logger(handlers, maxlen=maxlen)
 
 
-class _Logger(object):
+class _Logger(Sequence):
     """A logger object.
 
     Parameters
@@ -77,6 +81,11 @@ class _Logger(object):
     handlers : list or `None`
         A list of :class:`Handler` objects, each of which will be called in
         the given order. If `None`, the log entry will simply be ignored.
+    maxlen : int
+        The number of entries to store for later retrieval (e.g. log[-1]
+        for the last entry added). By default this is 0 i.e. entries are
+        discarded after being fed to the handlers. For an effectively
+        unlimited memory use `maxlen=sys.maxsize`.
 
     Attributes
     ----------
@@ -85,10 +94,17 @@ class _Logger(object):
         needed.
 
     """
-    def __init__(self, handlers=None):
+    def __init__(self, handlers=None, maxlen=0):
         if not handlers:
             handlers = []
         self.handlers = handlers
+        self._entries = deque([], maxlen=maxlen)
+
+    def __getitem__(self, key):
+        return self._entries[key]
+
+    def __len__(self):
+        return len(self._entries)
 
     def log(self, entry):
         """Log an entry.
@@ -105,6 +121,9 @@ class _Logger(object):
             A log entry is a (JSON-compatible) dict.
 
         """
+        # Store entry for retrieval
+        self._entries.append(entry)
+
         # For each set of filters, we store the JSON serialized entry
         filtered_entries = {}
         serialized_entries = {}
