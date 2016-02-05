@@ -16,17 +16,14 @@ store = {}
 sequence = 0
 snapshot.send(b'ICANHAZ?')
 while True:
-    try:
-        sequence, entry = int(snapshot.recv_string()), snapshot.recv_json()
-        if sequence < 0:
-            break
-        store[sequence] = entry
-        print(sequence)
-    except:
+    sequence, entry = int(snapshot.recv_string()), snapshot.recv_json()
+    if sequence < 0:
         break
+    store[sequence] = entry
+    print('{}: {}'.format(sequence, entry))
 
 while True:
     sequence, entry = int(subscriber.recv_string()), subscriber.recv_json()
     if sequence not in store:
         store[sequence] = entry
-        print(sequence)
+        print('{}: {}'.format(sequence, entry))

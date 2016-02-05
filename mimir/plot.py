@@ -9,6 +9,41 @@ import zmq
 
 
 def connect(x_key, y_key, push_port=5557, router_port=5556, persistent=True):
+    """Connect to a socket.
+
+    If connected to a persistent server, a snapshot of data will be
+    requested.
+
+    Parameters
+    ----------
+    x_key : str
+        The key in the serialized JSON object that contains the x-axis
+        value.
+    y_key : str
+        See `x_key`.
+    push_port : int
+        The port over which entries are pushed by the server.
+    router_port : int
+        THe port over which requests for snapshots are sent and snapshots
+        received.
+    persistent : bool
+        If True, the server is assumed to have a snapshot of all the data
+        and will be asked for it. If False, only new data will come in.
+
+    Returns
+    -------
+    subscriber : ZMQ socket
+        The socket over which log entries are streamed.
+    sequence : int
+        The sequence number of the last log entry that was received (always
+        0 in case `persistent` is set to `False`.
+    x : list
+        A list of the x values received as part of the snapshot. If
+        `persistent` is `False` this is an empty list.
+    y : list
+        See `x`.
+
+    """
     ctx = zmq.Context()
 
     subscriber = ctx.socket(zmq.SUB)
@@ -26,23 +61,40 @@ def connect(x_key, y_key, push_port=5557, router_port=5556, persistent=True):
 
         snapshot.send(b'ICANHAZ?')
         while True:
-            try:
-                sequence = int(snapshot.recv_string())
-                entry = json.loads(snapshot.recv_json())
-                if sequence < 0:
-                    break
+            sequence = int(snapshot.recv_string())
+            entry = json.loads(snapshot.recv_json())
+            if sequence < 0:
+                break
+            if x_key in entry and y_key in entry:
                 x.append(entry[x_key])
                 y.append(entry[y_key])
-            except:
-                break
 
     return subscriber, sequence, x, y
 
 
 def update(x_key, y_key, init_sequence, subscriber, plot):
+    """Add a data point to a given plot.
+
+    Parameters
+    ----------
+    x_key : str
+        The key in the serialized JSON object that contains the x-axis
+        value.
+    y_key : str
+        See `x_key`.
+    init_sequence : int
+        The sequence number to start plotting with; entries with lower
+        sequence numbers will be ignored (they were probably already
+        plotted when receiving the snapshot).
+    subscriber : ZMQ socket
+        The ZMQ socket to receive the sequence number and JSON data over.
+    plot : Bokeh plot
+        The Bokeh plot whose data source will be updated.
+
+    """
     sequence = int(subscriber.recv_string())
     entry = json.loads(subscriber.recv_json())
-    if sequence > init_sequence:
+    if sequence > init_sequence and x_key in entry and y_key in entry:
         # Mutating data source in place doesn't work
         x = plot.data_source.data['x'] + [entry[x_key]]
         y = plot.data_source.data['y'] + [entry[y_key]]
@@ -51,6 +103,19 @@ def update(x_key, y_key, init_sequence, subscriber, plot):
 
 
 def serve_plot(x_key, y_key, **kwargs):
+    r"""Live plot log entries on the current Bokeh server.
+
+    Parameters
+    ----------
+    x_key : str
+        The key in the serialized JSON object that contains the x-axis
+        value.
+    y_key : str
+        See `x_key`.
+    \*\*kwargs
+        Connection parameters passed to the `connect` function.
+
+    """
     subscriber, sequence, x, y = connect(x_key, y_key, **kwargs)
     session = push_session(curdoc())
 
@@ -63,6 +128,19 @@ def serve_plot(x_key, y_key, **kwargs):
 
 
 def notebook_plot(x_key, y_key, **kwargs):
+    r"""Live plot log entries in the current notebook.
+
+    Parameters
+    ----------
+    x_key : str
+        The key in the serialized JSON object that contains the x-axis
+        value.
+    y_key : str
+        See `x_key`.
+    \*\*kwargs
+        Connection parameters passed to the `connect` function.
+
+    """
     subscriber, sequence, x, y = connect(x_key, y_key, **kwargs)
     session = push_session(curdoc())
     output_notebook()
@@ -81,6 +159,7 @@ def notebook_plot(x_key, y_key, **kwargs):
     session.loop_until_closed()
 
 if __name__ == "__main__":
+    # Assuming a Bokeh server is running, this will create a live plot
     parser = argparse.ArgumentParser(description='Live stream plot')
     parser.add_argument('x_key')
     parser.add_argument('y_key')

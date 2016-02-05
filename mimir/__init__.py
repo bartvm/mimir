@@ -15,11 +15,11 @@ from . import gzlog
 def simple_formatter(entry, file, indent=0):
     """Called with the entry and the file to write to."""
     for key, value in iteritems(entry):
-        print('  ' * indent + str(key), file=file)
         if isinstance(value, dict):
+            print('{}{}:'.format('  ' * indent, key))
             simple_formatter(value, file, indent + 1)
         else:
-            print('  ' * (indent + 1) + str(value), file=file)
+            print('{}{}: {}'.format('  ' * indent, key, value), file=file)
 
 
 def Logger(filename=None, stream=False, persistent=True,
@@ -41,8 +41,8 @@ def Logger(filename=None, stream=False, persistent=True,
         experiments or very large logs in order to save memory.
     formatter : function
         A formatter function that determines how log entries will be
-        printed. If `None`, entries will not be printed to stdout.
-        Defaults to :func:`simple_formatter`.
+        printed to standard output. If `None`, entries will not be printed
+        at all. Defaults to :func:`simple_formatter`.
 
     Returns
     -------
@@ -74,9 +74,9 @@ class _Logger(object):
 
     Parameters
     ----------
-    handlers : list
+    handlers : list or `None`
         A list of :class:`Handler` objects, each of which will be called in
-        the given order.
+        the given order. If `None`, the log entry will simply be ignored.
 
     Attributes
     ----------
@@ -96,7 +96,8 @@ class _Logger(object):
         Will check if the handler contains filters and apply them if needed
         (so that if multiple handlers have the same filters, they are only
         applied once). Likewise, it will check if the log entry needs to be
-        serialized to JSON data.
+        serialized to JSON data, and make sure that the data is only
+        serialized once for each set of filters.
 
         Parameters
         ----------
@@ -131,12 +132,21 @@ class _Logger(object):
 class Handler(object):
     """Handlers deal with logging requests.
 
+    Parameters
+    ----------
+    filters : iterable
+        An iterable of functions which will be applied to the incoming
+        entry. If the `JSON` attribute of the handler is true, the entry
+        will be a serialized JSON object (i.e. a string). If it is false,
+        the entry will be a JSON-compatible dictionary.
+
     Attributes
     ----------
     JSON : bool
         If `True`, this handler will receive JSON-serialized data, if
         `False` the original (but filtered) entry will be received instead.
-        This allows JSON serialization to be done only once.
+        This allows JSON serialization to be done only once for all the
+        handlers. By default, this is false.
 
     """
     JSON = False
@@ -217,14 +227,11 @@ class GzipJSONHandler(Handler):
         self.fp = gzlog.Gzlog(filename)
 
     def log(self, entry):
-        data = entry + '\n'
-        self.fp.write(data)
+        self.fp.write(entry + '\n')
 
     def __del__(self):
-        """Tries to ensure that `.close()` is called on the gzipped log."""
-        fp = getattr(self, 'fp', None)
-        if fp:
-            fp.close()
+        """Ensure that `.close()` is called on the gzipped log."""
+        self.fp.close()
 
 
 class ServerHandler(Handler):
@@ -311,7 +318,7 @@ def state_manager(ctx, pipe, port):
                 snapshot.send_string(str(k), zmq.SNDMORE)
                 snapshot.send_json(v)
 
-            # A sequence number < 0 means end of snapshot
+            # Sending a sequence number < 0 means end of snapshot
             snapshot.send(client, zmq.SNDMORE)
             snapshot.send_string("-1", zmq.SNDMORE)
             snapshot.send_json({})
