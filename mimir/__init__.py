@@ -4,8 +4,7 @@ import binascii
 import os
 import sys
 import threading
-from collections import deque
-from collections.abc import Sequence
+from collections import deque, Sequence
 
 import simplejson as json
 import zmq
