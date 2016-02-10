@@ -51,6 +51,28 @@ assert logger[-1]['training_error'] == 10
 If you're sure that you won't run out of memory you can use
 `maxlen=sys.maxsize`.
 
+### Saving to disk
+
+We often want to save the log to disk to analyze it afterwards. Mímir
+allows you to save the log as line-delimited JSON files.
+
+```python
+logger = mimir.Logger(filename='log.jsonl.gz')
+for i in range(100):
+    logger.log({'iteration': i, 'training_error': 1. / (i + 1)})
+    time.sleep(1)
+```
+
+If the filename ends with `.gz` the log will be compressed in a streaming manner
+using [gzlog](https://github.com/madler/zlib/blob/master/examples/gzlog.c).
+
+To analyze the training logs [jq](https://stedolan.github.io/jq/) is
+recommended. For example, to get the minimum training error:
+
+```bash
+zcat log.json.gz | jq -s 'min_by(.training_error)'
+```
+
 ### Streaming
 
 Mímir can stream log entries over a TCP socket which clients can connect to,
@@ -74,28 +96,6 @@ plot every entry as it comes in.
 ```python
 import mimir.plot
 mimir.plot.notebook_plot('iteration', 'training_error')
-```
-
-### Saving to disk
-
-We often want to analyze the log entries afterwards. Mímir allows you to save
-the log to disk as line-delimited JSON files.
-
-```python
-logger = mimir.Logger(filename='log.jsonl.gz')
-for i in range(100):
-    logger.log({'iteration': i, 'training_error': 1. / (i + 1)})
-    time.sleep(1)
-```
-
-If the filename ends with `.gz` the log will be compressed in a streaming manner
-using [gzlog](https://github.com/madler/zlib/blob/master/examples/gzlog.c).
-
-To analyze the training logs [jq](https://stedolan.github.io/jq/) is
-recommended. For example, to get the minimum training error:
-
-```bash
-zcat log.json.gz | jq -s 'min_by(.training_error)'
 ```
 
 ## JSON
