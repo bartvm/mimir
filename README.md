@@ -129,3 +129,13 @@ logger.log({'iteration': 0, 'data': numpy.random.rand(10, 10)})
 with codecs.getreader('utf-8')(gzip.open('log.jsonl.gz', 'rb')) as f:
     entry = json.loads(f.readline(), obj_hook=deserialize_numpy)
 ```
+
+## Context manager
+
+The logger object can be used as a context manager, in which case all
+file objects are closed when the runtime context is exited.
+
+```python
+with Logger(filename='log.jsonl') as logger:
+    logger.log({'iteration': 0, 'training_error': 10})
+```

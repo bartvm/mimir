@@ -106,6 +106,14 @@ class _Logger(Sequence):
         self._entries = deque([], maxlen=maxlen)
         self.json_kwargs = kwargs
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        for handler in self.handlers:
+            handler.close()
+        return False
+
     def __getitem__(self, key):
         return self._entries[key]
 
@@ -186,8 +194,20 @@ class Handler(object):
         for filter in self.filters:
             entry = filter(entry)
 
+    def close(self):
+        pass
 
-class PrintHandler(Handler):
+
+class FileHandler(Handler):
+    """Handler that owns a file object."""
+    def close(self):
+        """Close the file object if possible."""
+        if (hasattr(self.fp, 'close') and
+                self.fp not in (sys.stdout, sys.stdin, sys.stderr)):
+            self.fp.close()
+
+
+class PrintHandler(FileHandler):
     """Prints entries to a file.
 
     Parameters
@@ -201,16 +221,16 @@ class PrintHandler(Handler):
         A file-like object to write to. Defaults to `sys.stdout`.
 
     """
-    def __init__(self, formatter=simple_formatter, file=sys.stdout, **kwargs):
+    def __init__(self, formatter=simple_formatter, fp=sys.stdout, **kwargs):
         super(PrintHandler, self).__init__(**kwargs)
-        self.file = file
+        self.fp = fp
         self.formatter = formatter
 
     def log(self, entry):
-        self.formatter(entry, self.file)
+        self.formatter(entry, self.fp)
 
 
-class JSONHandler(Handler):
+class JSONHandler(FileHandler):
     """Writes entries as JSON objects to a file.
 
     Parameters
@@ -231,7 +251,7 @@ class JSONHandler(Handler):
         self.fp.write('\n')
 
 
-class GzipJSONHandler(Handler):
+class GzipJSONHandler(FileHandler):
     """Writes entries to a GZipped JSON file robustly.
 
     Uses the `gzlog`_ example from `zlib`.
