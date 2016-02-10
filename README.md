@@ -1,8 +1,21 @@
 # Mímir
 
-JSON-based logging framework that allows [streaming to a gzipped
-log](https://github.com/madler/zlib/blob/master/examples/gzlog.c) and publishing
-log updates over TCP sockets using ZeroMQ.
+When training machine learning models there are often many things we
+want to log: training error, validation error, gradient and weights
+norms, samples, etc. There are a few considerations:
+
+* For long-running experiments the log should be streamed to disk so
+  that memory-usage doesn't grow.
+* The log should be stored in a format that is portable, easy to analyze, and
+  space-efficient.
+* We want to be able to plot and analyze the log while the
+  experiment is still running, potentially over the network.
+
+Mímir stores logs as line-delimited JSON data and can stream them to disk
+as a [gzipped
+files](https://github.com/madler/zlib/blob/master/examples/gzlog.c). It
+can also publish new entries over TCP sockets using
+[ZeroMQ](http://zeromq.org/), enabling things such as live plotting.
 
 ## Quickstart
 
