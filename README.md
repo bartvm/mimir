@@ -90,21 +90,42 @@ zcat log.json.gz | jq -s 'min_by(.training_error)'
 For streaming log entries over TCP sockets and saving logs to disk, Mímir uses
 JSON. To serialize non-basic types you need to pass a custom serialization
 function. Any keyword arguments passed to the `Logger` class will be passed to
-``json.dumps``.
+``json.dumps``. The following is an example of logging NumPy objects.
 
 ```python
 import base64
+import gzip
+import json
+
 import numpy
 from numpy.lib.format import header_data_from_array_1_0
 
 def serialize_numpy(obj):
     if isinstance(obj, np.ndarray):
-        obj = numpy.ascontiguousarray(obj)
-        header_data = header_data_from_array_1_0(obj)
-        header_data['__ndarray__'] = base64.b64encode(obj.data)
-        return header_data
+        if not obj.flags.c_contiguous and not obj.flags.f_contiguous:
+           obj = numpy.ascontiguousarray(obj)
+        dct = header_data_from_array_1_0(obj)
+        data = base64.b64encode(obj.data)
+        dct['__ndarray__'] = data
+        return dct
     raise TypeError
+
+def deserialize_numpy(dct):
+    if '__ndarray__' in dct:
+        data = base64.b64decode(dct['__ndarray__'])
+        obj = numpy.frombuffer(data, dtype=dct['descr'])
+        if dct['fortran_order']:
+            obj.shape = dct['shape'][::-1]
+            obj = obj.transpose()
+        else:
+            obj.shape = dct['shape']
+        return obj
+    return dct
 
 logger = mimir.Logger(filename='log.jsonl.gz', default=serialize_numpy)
 logger.log({'iteration': 0, 'data': numpy.random.rand(10, 10)})
+
+# The JSON data is written with UTF-8 encoding
+with codecs.getreader('utf-8')(gzip.open('log.jsonl.gz', 'rb')) as f:
+    entry = json.loads(f.readline(), obj_hook=deserialize_numpy)
 ```
