@@ -23,29 +23,39 @@ def simple_formatter(entry, file, indent=0):
             print('{}{}: {}'.format('  ' * indent, key, value), file=file)
 
 
-def Logger(filename=None, stream=False, persistent=True,
-           formatter=simple_formatter, maxlen=0):
+def Logger(filename=None, maxlen=0, stream=False, stream_maxlen=0,
+           formatter=simple_formatter):
     """A pseudo-class for easy initialization of a log.
+
+    .. note::
+
+       Note that the `stream` and `stream_maxlen` arguments are
+       independent. In order to respond to requests from streaming clients,
+       past entries are stored in a separate thread when `stream_maxlen >
+       0`, which is not the case for the entries stored when `maxlen > 0`.
 
     Parameters
     ----------
     filename : str
         The file to save the log to in newline delimited JSON format. If
         the filename ends in `.gz` it will be compressed on the fly.
+    maxlen : int
+        The number of entries to store for later retrieval. By default this
+        is 0 i.e.  entries are discarded after being fed to the handlers.
+        For an effectively unlimited memory use `maxlen=sys.maxsize`. When
+        `maxlen > 0` normal list indexing can be used e.g. ``log[-1]`` to
+        access the last entry.
     stream : bool
         If `True`, log entries will be published over a ZeroMQ socket.
         Defaults to `False`.
-    persistent : bool
-        Whether the log shoud keep entries in memory so that clients of the
-        streaming interface can request all data. Ignored when `stream` is
-        `False`, defaults to `True`. Should be disabled for long-running
-        experiments or very large logs in order to save memory.
+    stream_maxlen : int
+        How many entries the log should keep in memory so that clients of
+        the streaming interface can request data that they missed. Ignored
+        when `stream` is `False`, defaults to `0`.
     formatter : function
         A formatter function that determines how log entries will be
         printed to standard output. If `None`, entries will not be printed
         at all. Defaults to :func:`simple_formatter`.
-    maxlen : int
-        See :class:`_Logger`'s `maxlen` argument.
 
     Returns
     -------
@@ -60,13 +70,12 @@ def Logger(filename=None, stream=False, persistent=True,
         if ext == '.gz':
             handlers.append(GzipJSONHandler(root))
         else:
-            # TODO codecs open?
             handlers.append(JSONHandler(open(filename, 'w')))
     if formatter:
         handlers.append(PrintHandler(formatter))
     if stream:
-        if persistent:
-            handlers.append(PersistentServerHandler())
+        if stream_maxlen:
+            handlers.append(PersistentServerHandler(maxlen=stream_maxlen))
         else:
             handlers.append(ServerHandler())
     return _Logger(handlers, maxlen=maxlen)
@@ -81,10 +90,7 @@ class _Logger(Sequence):
         A list of :class:`Handler` objects, each of which will be called in
         the given order. If `None`, the log entry will simply be ignored.
     maxlen : int
-        The number of entries to store for later retrieval (e.g. log[-1]
-        for the last entry added). By default this is 0 i.e. entries are
-        discarded after being fed to the handlers. For an effectively
-        unlimited memory use `maxlen=sys.maxsize`.
+        See :func:`Logger`'s `maxlen` argument.
 
     Attributes
     ----------
@@ -280,13 +286,14 @@ class PersistentServerHandler(ServerHandler):
     # http://zguide.zeromq.org/py:clonesrv2
     JSON = True
 
-    def __init__(self, push_port=5557, router_port=5556, **kwargs):
+    def __init__(self, push_port=5557, router_port=5556, maxlen=0, **kwargs):
         super(PersistentServerHandler, self).__init__(port=push_port, **kwargs)
 
         # Set up IPC and start a thread
         self.updates, peer = zpipe(self.ctx)
         manager_thread = threading.Thread(target=state_manager,
-                                          args=(self.ctx, peer, router_port))
+                                          args=(self.ctx, peer,
+                                                router_port, maxlen))
         # Daemons are shut down when main process ends
         manager_thread.daemon = True
         manager_thread.start()
@@ -298,9 +305,9 @@ class PersistentServerHandler(ServerHandler):
         self._log(self.updates, entry)
 
 
-def state_manager(ctx, pipe, port):
+def state_manager(ctx, pipe, port, maxlen):
     """Stores log entries and sends them to clients upon request."""
-    store = {}
+    store = deque([], maxlen=maxlen)
 
     # Create socket through which snapshots can be sent
     snapshot = ctx.socket(zmq.ROUTER)
@@ -320,7 +327,7 @@ def state_manager(ctx, pipe, port):
 
         if pipe in items:
             sequence, entry = int(pipe.recv_string()), pipe.recv_json()
-            store[sequence] = entry
+            store.append((sequence, entry))
         if snapshot in items:
             # A client asked for a snapshot
             client, request = snapshot.recv_multipart()
@@ -331,7 +338,7 @@ def state_manager(ctx, pipe, port):
                 raise RuntimeError('strange request: {}'.format(request))
 
             # Send all the entries to the client
-            for k, v in store.items():
+            for k, v in store:
                 snapshot.send(client, zmq.SNDMORE)
                 snapshot.send_string(str(k), zmq.SNDMORE)
                 snapshot.send_json(v)

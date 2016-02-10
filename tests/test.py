@@ -8,7 +8,7 @@ json_log = open('log.json', 'w')
 logger.handlers = [PrintHandler(),
                    JSONHandler(json_log),
                    GzipJSONHandler('log.json'),
-                   PersistentServerHandler()]
+                   PersistentServerHandler(maxlen=10)]
 
 for i in range(2500):
     logger.log({'iteration': i, 'training_error': 1. / (i + 1)})

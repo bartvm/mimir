@@ -27,8 +27,9 @@ def connect(x_key, y_key, push_port=5557, router_port=5556, persistent=True):
         THe port over which requests for snapshots are sent and snapshots
         received.
     persistent : bool
-        If True, the server is assumed to have a snapshot of all the data
-        and will be asked for it. If False, only new data will come in.
+        If True, the server is assumed to have a snapshot of the data and
+        will be asked for it i.e. the `stream_maxlen` argument was
+        non-zero. If False, only new data will come in.
 
     Returns
     -------
