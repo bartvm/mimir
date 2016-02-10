@@ -33,7 +33,7 @@ setup(
     setup_requires=['Cython'],
     install_requires=['pyzmq', 'simplejson', 'six'],
     ext_modules=cythonize([
-        Extension("mimir.gzlog", ["gzlog/gzlog.pyx", "gzlog/cgzlog.c"],
+        Extension("mimir.gzlog", ["gzlog/gzlog.pyx"],
                   libraries=['z'])
     ])
 )

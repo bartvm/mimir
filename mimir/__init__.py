@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import binascii
+import io
 import os
 import sys
 import threading
@@ -261,6 +262,12 @@ class GzipJSONHandler(FileHandler):
     filename : str
         The filename (without `.gz` extension) to save the compressed log
         to.
+    buffered : bool
+        If True, the log is wrapped in a :class:`io.BufferedWriter` stream
+        for faster, buffered writing. This means that on system failure
+        data can be lost. It is set to true by default since it can give
+        significant overhead otherwise for experiments that perform large
+        amounts of logging.
 
     .. _gzlog:
        https://github.com/madler/zlib/blob/master/examples/gzlog.c
@@ -268,9 +275,12 @@ class GzipJSONHandler(FileHandler):
     """
     JSON = True
 
-    def __init__(self, filename, **kwargs):
+    def __init__(self, filename, buffered=True, **kwargs):
         super(GzipJSONHandler, self).__init__(**kwargs)
-        self.fp = gzlog.Gzlog(filename)
+        stream = gzlog.GZipLog(filename)
+        if buffered:
+            stream = io.BufferedWriter(stream)
+        self.fp = io.TextIOWrapper(stream)
 
     def log(self, entry):
         self.fp.write(entry + '\n')
