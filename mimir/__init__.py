@@ -6,9 +6,9 @@ import sys
 import threading
 from collections import deque, Sequence
 
-import simplejson as json
 import zmq
 from six import iteritems
+from zmq.utils.jsonapi import jsonmod as json
 
 from . import gzlog
 
@@ -24,7 +24,7 @@ def simple_formatter(entry, file, indent=0):
 
 
 def Logger(filename=None, maxlen=0, stream=False, stream_maxlen=0,
-           formatter=simple_formatter):
+           formatter=simple_formatter, **kwargs):
     """A pseudo-class for easy initialization of a log.
 
     .. note::
@@ -78,7 +78,7 @@ def Logger(filename=None, maxlen=0, stream=False, stream_maxlen=0,
             handlers.append(PersistentServerHandler(maxlen=stream_maxlen))
         else:
             handlers.append(ServerHandler())
-    return _Logger(handlers, maxlen=maxlen)
+    return _Logger(handlers, maxlen=maxlen, **kwargs)
 
 
 class _Logger(Sequence):
@@ -99,11 +99,12 @@ class _Logger(Sequence):
         needed.
 
     """
-    def __init__(self, handlers=None, maxlen=0):
+    def __init__(self, handlers=None, maxlen=0, **kwargs):
         if not handlers:
             handlers = []
         self.handlers = handlers
         self._entries = deque([], maxlen=maxlen)
+        self.json_kwargs = kwargs
 
     def __getitem__(self, key):
         return self._entries[key]
@@ -146,7 +147,8 @@ class _Logger(Sequence):
             # If the handler wants JSON data, give it
             if handler.JSON:
                 if filters not in serialized_entries:
-                    serialized_entries[filters] = json.dumps(filtered_entry)
+                    serialized_entries[filters] = json.dumps(
+                        filtered_entry, **self.json_kwargs)
                 serialized_entry = serialized_entries[filters]
                 handler.log(serialized_entry)
             else:
@@ -255,7 +257,8 @@ class GzipJSONHandler(Handler):
 
     def __del__(self):
         """Ensure that `.close()` is called on the gzipped log."""
-        self.fp.close()
+        if hasattr(self, 'fp'):
+            self.fp.close()
 
 
 class ServerHandler(Handler):
@@ -274,7 +277,7 @@ class ServerHandler(Handler):
     def _log(self, socket, entry):
         # For Python 3 compatibility we use the send_string method
         socket.send_string(str(self.sequence), zmq.SNDMORE)
-        socket.send_json(entry)
+        socket.send_string(entry)
 
     def log(self, entry):
         self.sequence += 1
@@ -326,7 +329,7 @@ def state_manager(ctx, pipe, port, maxlen):
             break
 
         if pipe in items:
-            sequence, entry = int(pipe.recv_string()), pipe.recv_json()
+            sequence, entry = int(pipe.recv_string()), pipe.recv_string()
             store.append((sequence, entry))
         if snapshot in items:
             # A client asked for a snapshot
@@ -341,12 +344,12 @@ def state_manager(ctx, pipe, port, maxlen):
             for k, v in store:
                 snapshot.send(client, zmq.SNDMORE)
                 snapshot.send_string(str(k), zmq.SNDMORE)
-                snapshot.send_json(v)
+                snapshot.send_string(v)
 
             # Sending a sequence number < 0 means end of snapshot
             snapshot.send(client, zmq.SNDMORE)
-            snapshot.send_string("-1", zmq.SNDMORE)
-            snapshot.send_json({})
+            snapshot.send_string('-1', zmq.SNDMORE)
+            snapshot.send_string('""')
 
 
 # Taken from github.com/imatix/zguide/blob/master/examples/Python/zhelpers.py

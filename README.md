@@ -59,7 +59,7 @@ following (requires Bokeh). It will plot the last 50 datapoints, and then live
 plot every entry as it comes in.
 
 ```python
-import mimir
+import mimir.plot
 mimir.plot.notebook_plot('iteration', 'training_error')
 ```
 
@@ -83,4 +83,28 @@ recommended. For example, to get the minimum training error:
 
 ```bash
 zcat log.json.gz | jq -s 'min_by(.training_error)'
+```
+
+## JSON
+
+For streaming log entries over TCP sockets and saving logs to disk, Mímir uses
+JSON. To serialize non-basic types you need to pass a custom serialization
+function. Any keyword arguments passed to the `Logger` class will be passed to
+``json.dumps``.
+
+```python
+import base64
+import numpy
+from numpy.lib.format import header_data_from_array_1_0
+
+def serialize_numpy(obj):
+    if isinstance(obj, np.ndarray):
+        obj = numpy.ascontiguousarray(obj)
+        header_data = header_data_from_array_1_0(obj)
+        header_data['__ndarray__'] = base64.b64encode(obj.data)
+        return header_data
+    raise TypeError
+
+logger = mimir.Logger(filename='log.jsonl.gz', default=serialize_numpy)
+logger.log({'iteration': 0, 'data': numpy.random.rand(10, 10)})
 ```

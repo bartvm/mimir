@@ -1,4 +1,5 @@
 import zmq
+from zmq.utils.jsonapi import jsonmod as json
 
 ctx = zmq.Context()
 
@@ -16,14 +17,16 @@ store = {}
 sequence = 0
 snapshot.send(b'ICANHAZ?')
 while True:
-    sequence, entry = int(snapshot.recv_string()), snapshot.recv_json()
+    sequence = int(snapshot.recv_string())
+    entry = json.loads(snapshot.recv_string())
     if sequence < 0:
         break
     store[sequence] = entry
     print('{}: {}'.format(sequence, entry))
 
 while True:
-    sequence, entry = int(subscriber.recv_string()), subscriber.recv_json()
+    sequence = int(subscriber.recv_string())
+    entry = json.loads(subscriber.recv_string())
     if sequence not in store:
         store[sequence] = entry
         print('{}: {}'.format(sequence, entry))

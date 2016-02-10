@@ -1,11 +1,11 @@
 import argparse
-from bokeh.client import push_session
-from bokeh.plotting import figure, curdoc, output_notebook, show
-import simplejson as json
-from bokeh.io import push_notebook
 from functools import partial
 
 import zmq
+from bokeh.client import push_session
+from bokeh.plotting import figure, curdoc, output_notebook, show
+from bokeh.io import push_notebook
+from zmq.utils.jsonapi import jsonmod as json
 
 
 def connect(x_key, y_key, push_port=5557, router_port=5556, persistent=True):
@@ -63,7 +63,7 @@ def connect(x_key, y_key, push_port=5557, router_port=5556, persistent=True):
         snapshot.send(b'ICANHAZ?')
         while True:
             sequence = int(snapshot.recv_string())
-            entry = json.loads(snapshot.recv_json())
+            entry = json.loads(snapshot.recv_string())
             if sequence < 0:
                 break
             if x_key in entry and y_key in entry:
@@ -94,7 +94,7 @@ def update(x_key, y_key, init_sequence, subscriber, plot):
 
     """
     sequence = int(subscriber.recv_string())
-    entry = json.loads(subscriber.recv_json())
+    entry = json.loads(subscriber.recv_string())
     if sequence > init_sequence and x_key in entry and y_key in entry:
         # Mutating data source in place doesn't work
         x = plot.data_source.data['x'] + [entry[x_key]]
