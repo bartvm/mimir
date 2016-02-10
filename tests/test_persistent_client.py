@@ -17,7 +17,7 @@ store = {}
 sequence = 0
 snapshot.send(b'ICANHAZ?')
 while True:
-    sequence = int(snapshot.recv_string())
+    sequence = int(snapshot.recv())
     entry = json.loads(snapshot.recv_string())
     if sequence < 0:
         break
@@ -25,7 +25,7 @@ while True:
     print('{}: {}'.format(sequence, entry))
 
 while True:
-    sequence = int(subscriber.recv_string())
+    sequence = int(subscriber.recv())
     entry = json.loads(subscriber.recv_string())
     if sequence not in store:
         store[sequence] = entry

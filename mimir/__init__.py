@@ -275,8 +275,9 @@ class ServerHandler(Handler):
         # No sleep means clients join late and miss the first few messages
 
     def _log(self, socket, entry):
-        # For Python 3 compatibility we use the send_string method
-        socket.send_string(str(self.sequence), zmq.SNDMORE)
+        socket.send(str(self.sequence).encode(), zmq.SNDMORE)
+        # ZMQ only sends bytes, and in Python 3 the JSON string will be
+        # unicode, so we use the send_string and recv_string methods.
         socket.send_string(entry)
 
     def log(self, entry):
@@ -329,7 +330,7 @@ def state_manager(ctx, pipe, port, maxlen):
             break
 
         if pipe in items:
-            sequence, entry = int(pipe.recv_string()), pipe.recv_string()
+            sequence, entry = int(pipe.recv()), pipe.recv_string()
             store.append((sequence, entry))
         if snapshot in items:
             # A client asked for a snapshot
@@ -343,12 +344,12 @@ def state_manager(ctx, pipe, port, maxlen):
             # Send all the entries to the client
             for k, v in store:
                 snapshot.send(client, zmq.SNDMORE)
-                snapshot.send_string(str(k), zmq.SNDMORE)
+                snapshot.send(str(k).encode(), zmq.SNDMORE)
                 snapshot.send_string(v)
 
             # Sending a sequence number < 0 means end of snapshot
             snapshot.send(client, zmq.SNDMORE)
-            snapshot.send_string('-1', zmq.SNDMORE)
+            snapshot.send('-1'.encode(), zmq.SNDMORE)
             snapshot.send_string('""')
 
 

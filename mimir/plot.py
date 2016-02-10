@@ -62,7 +62,7 @@ def connect(x_key, y_key, push_port=5557, router_port=5556, persistent=True):
 
         snapshot.send(b'ICANHAZ?')
         while True:
-            sequence = int(snapshot.recv_string())
+            sequence = int(snapshot.recv())
             entry = json.loads(snapshot.recv_string())
             if sequence < 0:
                 break
@@ -93,7 +93,7 @@ def update(x_key, y_key, init_sequence, subscriber, plot):
         The Bokeh plot whose data source will be updated.
 
     """
-    sequence = int(subscriber.recv_string())
+    sequence = int(subscriber.recv())
     entry = json.loads(subscriber.recv_string())
     if sequence > init_sequence and x_key in entry and y_key in entry:
         # Mutating data source in place doesn't work
