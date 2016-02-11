@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import abc
 import binascii
 import io
 import os
@@ -7,8 +8,8 @@ import sys
 import threading
 from collections import deque, Sequence
 
+import six
 import zmq
-from six import iteritems
 from zmq.utils.jsonapi import jsonmod as json
 
 from . import gzlog
@@ -16,7 +17,7 @@ from . import gzlog
 
 def simple_formatter(entry, file, indent=0):
     """Called with the entry and the file to write to."""
-    for key, value in iteritems(entry):
+    for key, value in six.iteritems(entry):
         if isinstance(value, dict):
             print('{}{}:'.format('  ' * indent, key))
             simple_formatter(value, file, indent + 1)
@@ -71,7 +72,7 @@ def Logger(filename=None, maxlen=0, stream=False, stream_maxlen=0,
         if ext == '.gz':
             handlers.append(GzipJSONHandler(root))
         else:
-            handlers.append(JSONHandler(open(filename, 'w')))
+            handlers.append(JSONHandler(io.open(filename, 'w')))
     if formatter:
         handlers.append(PrintHandler(formatter))
     if stream:
@@ -105,6 +106,8 @@ class _Logger(Sequence):
             handlers = []
         self.handlers = handlers
         self._entries = deque([], maxlen=maxlen)
+        # Ensure that json.dumps returns UTF-8 strings on Python 2
+        kwargs.setdefault('ensure_ascii', False)
         self.json_kwargs = kwargs
 
     def __enter__(self):
@@ -113,7 +116,6 @@ class _Logger(Sequence):
     def __exit__(self, exc_type, exc_val, exc_tb):
         for handler in self.handlers:
             handler.close()
-        return False
 
     def __getitem__(self, key):
         return self._entries[key]
@@ -164,6 +166,7 @@ class _Logger(Sequence):
                 handler.log(filtered_entry)
 
 
+@six.add_metaclass(abc.ABCMeta)
 class Handler(object):
     """Handlers deal with logging requests.
 
@@ -197,6 +200,10 @@ class Handler(object):
 
     def close(self):
         pass
+
+    @abc.abstractmethod
+    def log(self, entry):
+        raise NotImplementedError
 
 
 class FileHandler(Handler):
@@ -248,8 +255,7 @@ class JSONHandler(FileHandler):
         self.fp = fp
 
     def log(self, entry):
-        self.fp.write(entry)
-        self.fp.write('\n')
+        self.fp.write(entry + '\n')
 
 
 class GzipJSONHandler(FileHandler):
@@ -301,7 +307,7 @@ class ServerHandler(Handler):
         self.ctx = zmq.Context()
         self.sequence = 0
         self.publisher = self.ctx.socket(zmq.PUB)
-        self.publisher.bind("tcp://*:{}".format(port))
+        self.publisher.bind('tcp://*:{}'.format(port))
         # No sleep means clients join late and miss the first few messages
 
     def _log(self, socket, entry):
@@ -345,7 +351,7 @@ def state_manager(ctx, pipe, port, maxlen):
 
     # Create socket through which snapshots can be sent
     snapshot = ctx.socket(zmq.ROUTER)
-    snapshot.bind("tcp://*:{}".format(port))
+    snapshot.bind('tcp://*:{}'.format(port))
 
     # Listen for both updates from main thread, and requests for snapshots
     poller = zmq.Poller()
@@ -367,9 +373,8 @@ def state_manager(ctx, pipe, port, maxlen):
             client, request = snapshot.recv_multipart()
             # NB: client is needed to route messages
             # http://zeromq.org/tutorials:dealer-and-router
-            if request != b"ICANHAZ?":
-                # TODO Maybe break instead of raise to be more robust?
-                raise RuntimeError('strange request: {}'.format(request))
+            if request != b'ICANHAZ?':
+                raise RuntimeError('strange request')
 
             # Send all the entries to the client
             for k, v in store:
@@ -390,7 +395,7 @@ def zpipe(ctx):
     b = ctx.socket(zmq.PAIR)
     a.linger = b.linger = 0
     a.hwm = b.hwm = 1
-    iface = "inproc://%s".format(binascii.hexlify(os.urandom(8)))
+    iface = 'inproc://{}'.format(binascii.hexlify(os.urandom(8)))
     a.bind(iface)
     b.connect(iface)
     return a, b
