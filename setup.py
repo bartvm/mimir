@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
+import io
 from setuptools import setup, Extension
-from codecs import open
 from os import path
 from Cython.Build import cythonize
 
 here = path.abspath(path.dirname(__file__))
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
+with io.open(path.join(here, 'README.rst')) as f:
     long_description = f.read()
 
 setup(
