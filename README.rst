@@ -74,6 +74,25 @@ If the filename ends with ``.gz`` the log will be compressed in a
 streaming manner using
 `gzlog <https://github.com/madler/zlib/blob/master/examples/gzlog.c>`__.
 
+Loading logs
+~~~~~~~~~~~~
+
+If you want to load a log that was saved to disk so that its entries can be
+accessed in memory, use the ``load`` method. Any keyword arguments passed to
+this method will be passed on to ``json.loads``, which can be useful for the
+deserialization of non-basic types. By default, NumPy objects are deserialized
+using ``mimir.serialization.deserialize_numpy``.
+
+.. code:: python
+
+    logger = mimir.Logger('log.jsonl.gz')
+    logger.log({'iteration': 12})
+    logger.close()
+
+    new_logger = mimir.Logger('log.jsonl.gz', maxlen=10)
+    new_logger.load('log.jsonl.gz')
+    assert new_logger[-1]['iteration'] == 12
+
 Streaming
 ~~~~~~~~~
 
@@ -162,46 +181,28 @@ flag for compact output.
 JSON serialization
 ------------------
 
-For streaming log entries over TCP sockets and saving logs to disk,
-Mímir uses JSON. To serialize non-basic types you need to pass a custom
-serialization function. Any keyword arguments passed to the ``Logger``
-class will be passed to ``json.dumps``. The following is an example of
-logging NumPy objects.
+For streaming log entries over TCP sockets and saving logs to disk, Mímir uses
+JSON. To serialize non-basic types you need to pass a custom serialization
+function. Any keyword arguments passed to the ``Logger`` class will be passed to
+``json.dumps``. By default Mímir will pass ``default=serialize_numpy``, which
+enables the serialization of NumPy arrays and scalars (``numpy.ndarray`` and
+``numpy.generic``). Below is an example of how to go about serializing other
+objects:
 
 .. code:: python
 
-    import base64
-    import gzip
-    import json
-
     import numpy
-    from numpy.lib.format import header_data_from_array_1_0
+    import mimir
+    from mimir.serialization import serialize_numpy, deserialize_numpy
 
-    def serialize_numpy(obj):
-        if isinstance(obj, np.ndarray):
-            if not obj.flags.c_contiguous and not obj.flags.f_contiguous:
-               obj = numpy.ascontiguousarray(obj)
-            dct = header_data_from_array_1_0(obj)
-            data = base64.b64encode(obj.data)
-            dct['__ndarray__'] = data
-            return dct
-        raise TypeError
+    def serialize_set(obj):
+        if isinstance(obj, set):
+            return tuple(obj)
+        return serialize_numpy(obj)
 
-    def deserialize_numpy(dct):
-        if '__ndarray__' in dct:
-            data = base64.b64decode(dct['__ndarray__'])
-            obj = numpy.frombuffer(data, dtype=dct['descr'])
-            if dct['fortran_order']:
-                obj.shape = dct['shape'][::-1]
-                obj = obj.transpose()
-            else:
-                obj.shape = dct['shape']
-            return obj
-        return dct
+    logger = mimir.Logger(filename='log.jsonl.gz', default=serialize_set)
+    logger.log({'foo': set([1, 2]), 'bar': numpy.random.rand(10, 10)})
 
-    logger = mimir.Logger(filename='log.jsonl.gz', default=serialize_numpy)
-    logger.log({'iteration': 0, 'data': numpy.random.rand(10, 10)})
-
-    # The JSON data is written with UTF-8 encoding
-    with codecs.getreader('utf-8')(gzip.open('log.jsonl.gz', 'rb')) as f:
+    # In legacy Python use codecs.getreader('utf-8')(gzip.open(fn))
+    with gzip.open('log.jsonl.gz', 'rt') as f:
         entry = json.loads(f.readline(), obj_hook=deserialize_numpy)
