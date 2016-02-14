@@ -167,7 +167,7 @@ every *n* iterations) you use the `select` function to filter these out.
 
     cat log.jsonl | jq 'select(.sample)
 
-If you want to write the log back to a file after operating on use the ``-c``
+If you want to write the log back to a file after operating on it use the ``-c``
 flag for compact output.
 
 .. code:: bash
