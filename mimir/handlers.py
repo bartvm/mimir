@@ -30,6 +30,9 @@ class Handler(object):
         `False` the original (but filtered) entry will be received instead.
         This allows JSON serialization to be done only once for all the
         handlers. By default, this is false.
+    filters : iterable
+        The filters applied to each entry. Can be changed in place in order
+        to change the filtering behavior of the handler.
 
     """
     JSON = False
@@ -136,11 +139,6 @@ class GzipJSONHandler(FileHandler):
     def log(self, entry):
         self.fp.write(entry + '\n')
 
-    def __del__(self):
-        """Ensure that `.close()` is called on the gzipped log."""
-        if hasattr(self, 'fp'):
-            self.fp.close()
-
 
 class ServerHandler(Handler):
     """Streams updates over TCP.
@@ -182,16 +180,15 @@ class PersistentServerHandler(ServerHandler):
         5557.
     router_port : int, optional
         The port over which snapshots will be sent. Defaults to 5556.
-    maxlen : int, optional
+    maxlen : int or None, optional
         The maximum number of log entries to keep in memory i.e. the
-        maximum size of the snapshot. Defaults to the effectively unlimited
-        ``sys.maxsize``.
+        maximum size of the snapshot. Defaults to None.
 
     """
     # http://zguide.zeromq.org/py:clonesrv2
     JSON = True
 
-    def __init__(self, push_port=5557, router_port=5556, maxlen=sys.maxsize,
+    def __init__(self, push_port=5557, router_port=5556, maxlen=None,
                  **kwargs):
         super(PersistentServerHandler, self).__init__(port=push_port, **kwargs)
 
@@ -224,7 +221,7 @@ def state_manager(ctx, pipe, port, maxlen):
         A PAIR socket used to receive log entries from the main thread.
     port : int
         The port to bind the ROUTER socket to.
-    maxlen : int
+    maxlen : int or None
         The maximum number of entries to keep in memory.
 
     """

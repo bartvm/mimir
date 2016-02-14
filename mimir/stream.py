@@ -1,4 +1,10 @@
-"""Helper functions to receive log entries that are streamed."""
+"""Helper functions to receive log entries that are streamed.
+
+All functions that receive log entries accept keyword arguments which will
+be passed on to ``json.loads``. By default NumPy arrays are supported. See
+also the documentation of :func:`recv`.
+
+"""
 import zmq
 from zmq.utils.jsonapi import jsonmod as json
 
@@ -6,7 +12,7 @@ from .serialization import deserialize_numpy
 
 
 def get_snapshot(host='localhost', port=5556, ctx=None, **kwargs):
-    r"""Request a snapshot of data from a streaming log.
+    """Request a snapshot of data from a streaming log.
 
     Parameters
     ----------
@@ -16,10 +22,6 @@ def get_snapshot(host='localhost', port=5556, ctx=None, **kwargs):
         The port to bind to. Defaults to 5556.
     ctx : :class:`zmq.Context`, optional
         The context to use. If not given a new one will be created.
-    \*\*kwargs
-        Keyword arguments will be passed on to ``json.loads``. By default
-        ``object_hook=deserialize_numpy`` will be passed to support the
-        deserialization of NumPy arrays and scalars.
 
     Returns
     -------
@@ -82,7 +84,16 @@ def connect(host='localhost', port=5557, ctx=None):
 
 
 def recv(s, **kwargs):
-    """Receive a log entry from the given socket."""
+    r"""Receive a log entry from the given socket.
+
+    Parameters
+    ----------
+    \*\*kwargs
+        Keyword arguments will be passed on to ``json.loads``. By default
+        ``object_hook=deserialize_numpy`` will be passed to support the
+        deserialization of NumPy arrays and scalars.
+
+    """
     kwargs.setdefault('object_hook', deserialize_numpy)
     sequence = int(s.recv())
     entry = json.loads(s.recv_string(), **kwargs)
@@ -113,26 +124,19 @@ def callback(callback, host='localhost', push_port=5557, router_port=5556,
         Defaults to false.
     ctx : :class:`zmq.Context`, optional
         The context to use. If not given a new one will be created.
-    \*\*kwargs
-        Keyword arguments will be passed on to ``json.loads``. By default
-        ``object_hook=deserialize_numpy`` will be passed to support the
-        deserialization of NumPy arrays and scalars.
 
     """
     if not ctx:
         ctx = zmq.Context()
 
+    init_sequence = 0
     if get_snapshot:
         init_sequence, entries = get_snapshot(host=host, port=router_port,
                                               ctx=ctx, **kwargs)
-    else:
-        init_sequence, entries = 0, []
+        for entry in entries:
+            callback(entry)
 
     subscriber = connect(host=host, port=push_port, ctx=ctx)
-
-    for entry in entries:
-        callback(entry)
-
     while True:
         try:
             sequence, entry = recv(subscriber, **kwargs)

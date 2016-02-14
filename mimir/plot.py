@@ -11,7 +11,7 @@ from .stream import get_snapshot, recv, connect
 
 
 def get_socket(x_key, y_key, host='localhost', push_port=5557,
-               router_port=5556, persistent=True):
+               router_port=5556, persistent=True, **kwargs):
     """Connect to a socket.
 
     If connected to a persistent server, a snapshot of data will be
@@ -55,7 +55,7 @@ def get_socket(x_key, y_key, host='localhost', push_port=5557,
     x, y = [], []
 
     if persistent:
-        sequence, entries = get_snapshot(port=router_port, ctx=ctx)
+        sequence, entries = get_snapshot(port=router_port, ctx=ctx, **kwargs)
         for entry in entries:
             if x_key in entry and y_key in entry:
                 x.append(entry[x_key])

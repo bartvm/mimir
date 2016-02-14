@@ -33,7 +33,8 @@ def Logger(filename=None, maxlen=0, stream=False, stream_maxlen=0,
         The number of entries to store for later retrieval. By default this
         is 0 i.e. entries are discarded after being fed to the handlers.
         For unlimited memory pass ``None``. When `maxlen > 0` normal list
-        indexing can be used e.g. ``log[-1]`` to access the last entry.
+        indexing can be used e.g. ``log[-1]`` to access the last entry. Use
+        ``None`` for unlimited memory.
     stream : bool, optional
         If `True`, log entries will be published over a ZeroMQ socket.
         Defaults to `False`.
@@ -47,7 +48,8 @@ def Logger(filename=None, maxlen=0, stream=False, stream_maxlen=0,
         printed to standard output. If `None`, entries will not be printed
         at all. Defaults to :func:`simple_formatter`.
     \*\*kwargs
-        Keyword arguments passed on to ``json.dumps``.
+        Keyword arguments passed on to ``json.dumps``. By default
+        ``ensure_ascii=False`` and ``default=serialize_numpy`` are passed.
 
     Returns
     -------
@@ -78,11 +80,14 @@ class _Logger(Sequence):
 
     Parameters
     ----------
-    handlers : list or `None`
+    handlers : list or None
         A list of :class:`Handler` objects, each of which will be called in
         the given order. If `None`, the log entry will simply be ignored.
-    maxlen : int
+    maxlen : int or None, optional
         See :func:`Logger`'s `maxlen` argument.
+    \*\*kwargs
+        Keyword arguments passed on to ``json.dumps``. By default
+        ``ensure_ascii=False`` and ``default=serialize_numpy`` are passed.
 
     Attributes
     ----------
@@ -114,6 +119,7 @@ class _Logger(Sequence):
         return len(self._entries)
 
     def close(self):
+        """Close the handlers."""
         for handler in self.handlers:
             handler.close()
 
@@ -135,19 +141,22 @@ class _Logger(Sequence):
             The number of log entries in the file.
 
         """
-        root, ext = os.path.splitext(filename)
-        num_entries = 0
         entries = deque([], maxlen=self._entries.maxlen)
+
+        def process(f, entries):
+            num_entries = 0
+            for line in f:
+                entries.append(line)
+                num_entries += 1
+            return num_entries
+
+        root, ext = os.path.splitext(filename)
         if ext == '.gz':
             with codecs.getreader('utf-8')(gzip.open(filename)) as f:
-                for line in f:
-                    num_entries += 1
-                    entries.append(line)
+                num_entries = process(f, entries)
         else:
             with io.open(filename) as f:
-                for line in f:
-                    num_entries += 1
-                    entries.append(line)
+                num_entries = process(f, entries)
         kwargs.setdefault('object_hook', deserialize_numpy)
         for entry in entries:
             self._entries.append(json.loads(entry, **kwargs))
