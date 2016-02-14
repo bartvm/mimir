@@ -1,11 +1,13 @@
 import time
-from mimir import (Logger, PrintHandler, JSONHandler,
-                   GzipJSONHandler, PersistentServerHandler)
+from mimir import Logger
+from mimir.handlers import (PrintHandler, JSONHandler, GzipJSONHandler,
+                            PersistentServerHandler)
+from mimir.formatters import simple_formatter
 
 logger = Logger()
 
 json_log = open('log.json', 'w')
-logger.handlers = [PrintHandler(),
+logger.handlers = [PrintHandler(simple_formatter),
                    JSONHandler(json_log),
                    GzipJSONHandler('log.json'),
                    PersistentServerHandler(maxlen=10)]

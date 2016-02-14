@@ -1,3 +1,4 @@
+"""Formatters for printing log entries in human-readable format."""
 from __future__ import print_function
 
 import six

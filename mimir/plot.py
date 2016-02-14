@@ -1,3 +1,4 @@
+"""Plotting utilities for logs that are being streamed."""
 import argparse
 from functools import partial
 
@@ -5,10 +6,12 @@ import zmq
 from bokeh.client import push_session
 from bokeh.plotting import figure, curdoc, output_notebook, show
 from bokeh.io import push_notebook
-from zmq.utils.jsonapi import jsonmod as json
+
+from .stream import get_snapshot, recv, connect
 
 
-def connect(x_key, y_key, push_port=5557, router_port=5556, persistent=True):
+def get_socket(x_key, y_key, host='localhost', push_port=5557,
+               router_port=5556, persistent=True):
     """Connect to a socket.
 
     If connected to a persistent server, a snapshot of data will be
@@ -46,26 +49,14 @@ def connect(x_key, y_key, push_port=5557, router_port=5556, persistent=True):
 
     """
     ctx = zmq.Context()
-
-    subscriber = ctx.socket(zmq.SUB)
-    subscriber.linger = 0
-    subscriber.setsockopt(zmq.SUBSCRIBE, b'')
-    subscriber.connect("tcp://localhost:{}".format(push_port))
+    subscriber = connect(host=host, port=push_port, ctx=ctx)
 
     sequence = 0
     x, y = [], []
 
     if persistent:
-        snapshot = ctx.socket(zmq.DEALER)
-        snapshot.linger = 0
-        snapshot.connect("tcp://localhost:{}".format(router_port))
-
-        snapshot.send(b'ICANHAZ?')
-        while True:
-            sequence = int(snapshot.recv())
-            entry = json.loads(snapshot.recv_string())
-            if sequence < 0:
-                break
+        sequence, entries = get_snapshot(port=router_port, ctx=ctx)
+        for entry in entries:
             if x_key in entry and y_key in entry:
                 x.append(entry[x_key])
                 y.append(entry[y_key])
@@ -93,8 +84,7 @@ def update(x_key, y_key, init_sequence, subscriber, plot):
         The Bokeh plot whose data source will be updated.
 
     """
-    sequence = int(subscriber.recv())
-    entry = json.loads(subscriber.recv_string())
+    sequence, entry = recv(subscriber)
     if sequence > init_sequence and x_key in entry and y_key in entry:
         # Mutating data source in place doesn't work
         x = plot.data_source.data['x'] + [entry[x_key]]
@@ -117,7 +107,7 @@ def serve_plot(x_key, y_key, **kwargs):
         Connection parameters passed to the `connect` function.
 
     """
-    subscriber, sequence, x, y = connect(x_key, y_key, **kwargs)
+    subscriber, sequence, x, y = get_socket(x_key, y_key, **kwargs)
     session = push_session(curdoc())
 
     fig = figure()
@@ -142,7 +132,7 @@ def notebook_plot(x_key, y_key, **kwargs):
         Connection parameters passed to the `connect` function.
 
     """
-    subscriber, sequence, x, y = connect(x_key, y_key, **kwargs)
+    subscriber, sequence, x, y = get_socket(x_key, y_key, **kwargs)
     session = push_session(curdoc())
     output_notebook()
 

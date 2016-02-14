@@ -1,3 +1,4 @@
+"""The logger object and user-friendly interface for constructing it."""
 import codecs
 import gzip
 import io
@@ -65,7 +66,7 @@ def Logger(filename=None, maxlen=0, stream=False, stream_maxlen=0,
     if formatter:
         handlers.append(PrintHandler(formatter))
     if stream:
-        if stream_maxlen:
+        if stream_maxlen != 0:
             handlers.append(PersistentServerHandler(maxlen=stream_maxlen))
         else:
             handlers.append(ServerHandler())
