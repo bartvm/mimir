@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 import io
 from setuptools import setup, Extension
-from os import path
 from Cython.Build import cythonize
 
-here = path.abspath(path.dirname(__file__))
-with io.open(path.join(here, 'README.rst')) as f:
-    long_description = f.read()
+
+def readme():
+    with io.open('README.rst') as f:
+        return f.read()
 
 setup(
     name='mimir',
     version='0.1.dev1',
     description='A mini-framework for logging JSON-compatible objects',
-    long_description=long_description,
+    long_description=readme(),
     url='https://github.com/bartvm/mimir',
     author='Bart van Merriënboer',
     author_email='bart.vanmerrienboer@gmail.com',
@@ -31,9 +31,10 @@ setup(
     keywords='logging machine learning',
     packages=['mimir'],
     setup_requires=['Cython'],
-    install_requires=['pyzmq', 'simplejson', 'six'],
+    install_requires=['pyzmq', 'six'],
     ext_modules=cythonize([
         Extension("mimir.gzlog", ["gzlog/gzlog.pyx"],
                   libraries=['z'])
-    ])
+    ]),
+    zip_safe=False
 )
