@@ -129,17 +129,29 @@ class _Logger(Sequence):
             Arguments passed on ``json.loads``, useful for deserializing
             non-basic objects. By default ``deserialize_numpy`` is passed.
 
+        Returns
+        -------
+        num_entries : int
+            The number of log entries in the file.
+
         """
         root, ext = os.path.splitext(filename)
+        num_entries = 0
+        entries = deque([], maxlen=self._entries.maxlen)
         if ext == '.gz':
             with codecs.getreader('utf-8')(gzip.open(filename)) as f:
-                entries = deque(f, maxlen=self._entries.maxlen)
+                for line in f:
+                    num_entries += 1
+                    entries.append(line)
         else:
             with io.open(filename) as f:
-                entries = deque(f, maxlen=self._entries.maxlen)
+                for line in f:
+                    num_entries += 1
+                    entries.append(line)
         kwargs.setdefault('object_hook', deserialize_numpy)
         for entry in entries:
             self._entries.append(json.loads(entry, **kwargs))
+        return num_entries
 
     def log(self, entry):
         """Log an entry.
