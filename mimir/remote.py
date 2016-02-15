@@ -23,17 +23,19 @@ def _server_logger(port, loads_kwargs, *args, **kwargs):
     # Wait for the first client to connect
     client_id = 1
     clients = {}
-    client, _, request = remote_logs.recv_multipart()
+    msg = remote_logs.recv_multipart()
+    client, request = msg[0], msg[2]
     assert request == LOG_READY
-    clients[client] = client_id
+    clients[client] = msg[3].decode() or client_id
     remote_logs.send_multipart([client, b'', LOG_READY])
 
     while clients:
-        client, _, request = remote_logs.recv_multipart()
+        msg = remote_logs.recv_multipart()
+        client, request = msg[0], msg[2]
         if request == LOG_READY:
             assert client not in clients
             client_id += 1
-            clients[client] = client_id
+            clients[client] = msg[3].decode() or client_id
             remote_logs.send_multipart([client, b'', LOG_READY])
         elif request == LOG_DONE:
             assert client in clients
@@ -42,7 +44,7 @@ def _server_logger(port, loads_kwargs, *args, **kwargs):
         else:
             assert client in clients
             entry = loads(request.decode(), **(loads_kwargs or {}))
-            entry['remote_log'] = client_id
+            entry['remote_log'] = clients[client]
             logger.log(entry)
             remote_logs.send_multipart([client, b'', LOG_ACK])
     return logger
@@ -106,6 +108,9 @@ class RemoteLogger(object):
 
     Parameters
     ----------
+    name : str, optional
+        The name that identifies this remote logger, which will be added to
+        the log entries by the server logger.
     host : str, optional
         The host to send the entries to. Defaults to `localhost`.
     port : int, optional
@@ -116,7 +121,8 @@ class RemoteLogger(object):
         All other keyword arguments will be passed on to ``json.dumps``.
 
     """
-    def __init__(self, host='localhost', port=5555, ctx=None, **kwargs):
+    def __init__(self, name=None, host='localhost', port=5555, ctx=None,
+                 **kwargs):
         # Connect to server log
         self.closed = True
         if not ctx:
@@ -126,7 +132,7 @@ class RemoteLogger(object):
         self.server_log = server_log
 
         # Handshake with server
-        server_log.send(LOG_READY)
+        server_log.send_multipart([LOG_READY, name.encode() if name else b''])
         assert server_log.recv() == LOG_READY
         self.closed = False
 
