@@ -55,7 +55,7 @@ long-running experiments don't run out of memory.
     assert logger[-1]['training_error'] == 10
 
 If you're sure that you won't run out of memory you can use
-``maxlen=sys.maxsize``.
+``maxlen=None`` for unlimited memory.
 
 Saving to disk
 ~~~~~~~~~~~~~~
@@ -165,7 +165,7 @@ every *n* iterations) you use the `select` function to filter these out.
 
 .. code:: bash
 
-    cat log.jsonl | jq 'select(.sample)
+    cat log.jsonl | jq 'select(.sample)'
 
 If you want to write the log back to a file after operating on it use the ``-c``
 flag for compact output.
