@@ -17,7 +17,8 @@ LOG_DONE = b"\x03"
 
 
 def Logger(filename=None, maxlen=0, stream=False, stream_maxlen=0,
-           formatter=simple_formatter, **kwargs):
+           formatter=simple_formatter, push_port=5557, router_port=5556,
+           **kwargs):
     r"""A pseudo-class for easy initialization of a log.
 
     .. note::
@@ -50,6 +51,12 @@ def Logger(filename=None, maxlen=0, stream=False, stream_maxlen=0,
         A formatter function that determines how log entries will be
         printed to standard output. If `None`, entries will not be printed
         at all. Defaults to :func:`simple_formatter`.
+    push_port : int, optional
+        The port over which log entries will be published if `stream` is
+        true. Defaults to 5557.
+    router_port : int, optional
+        The port over which snapshots will be sent if `stream_maxlen > 0`.
+        Defaults to 5556.
     \*\*kwargs
         Keyword arguments passed on to ``json.dumps``. By default
         ``ensure_ascii=False`` and ``default=serialize_numpy`` are passed.
@@ -72,9 +79,12 @@ def Logger(filename=None, maxlen=0, stream=False, stream_maxlen=0,
         handlers.append(PrintHandler(formatter))
     if stream:
         if stream_maxlen != 0:
-            handlers.append(PersistentServerHandler(maxlen=stream_maxlen))
+            handlers.append(PersistentServerHandler(
+                push_port=push_port, router_port=router_port,
+                maxlen=stream_maxlen
+            ))
         else:
-            handlers.append(ServerHandler())
+            handlers.append(ServerHandler(port=push_port))
     return _Logger(handlers, maxlen=maxlen, **kwargs)
 
 
