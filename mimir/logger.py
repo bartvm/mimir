@@ -3,7 +3,6 @@ import io
 import os
 from collections import deque, Sequence
 
-import zmq
 from zmq.utils.jsonapi import jsonmod as json
 
 from . import utils
@@ -197,86 +196,3 @@ class _Logger(Sequence):
                 handler.log(serialized_entry)
             else:
                 handler.log(filtered_entry)
-
-    def listen(self, port, ctx=None, **kwargs):
-        """Listen for log entries from remote logs on this port."""
-        if not ctx:
-            ctx = zmq.Context()
-
-        remote_logs = ctx.socket(zmq.ROUTER)
-        remote_logs.bind("tcp://*:5555")
-
-        # Wait for the first client to connect
-        client_id = 1
-        clients = {}
-        client, _, request = remote_logs.recv_multipart()
-        assert request == LOG_READY
-        clients[client] = client_id
-        remote_logs.send_multipart([client, b'', LOG_READY])
-
-        while clients:
-            client, _, request = remote_logs.recv_multipart()
-            if request == LOG_READY:
-                assert client not in clients
-                client_id += 1
-                clients[client] = client_id
-                remote_logs.send_multipart([client, b'', LOG_READY])
-            elif request == LOG_DONE:
-                assert client in clients
-                del clients[client]
-                remote_logs.send_multipart([client, b'', LOG_DONE])
-            else:
-                assert client in clients
-                entry = loads(request.decode(), **kwargs)
-                entry['remote_log'] = client_id
-                self.log(entry)
-                remote_logs.send_multipart([client, b'', LOG_ACK])
-        self.close()
-
-
-def ServerLogger(port=5555, loads_kwargs=None, dumps_kwargs=None,
-                 *args, **kwargs):
-    kwargs.update(dumps_kwargs or {})
-    logger = Logger(*args, **kwargs)
-    logger.listen(port, **(loads_kwargs or {}))
-    return logger
-
-
-class RemoteLogger(object):
-    def __init__(self, host='localhost', port=5555, ctx=None, **kwargs):
-        # Connect to server log
-        self.closed = True
-        if not ctx:
-            ctx = zmq.Context()
-        server_log = ctx.socket(zmq.REQ)
-        server_log.connect('tcp://{}:{}'.format(host, port))
-        self.server_log = server_log
-
-        # Handshake with server
-        server_log.send(LOG_READY)
-        assert server_log.recv() == LOG_READY
-        self.closed = False
-
-        # JSON serialization
-        kwargs.setdefault('ensure_ascii', False)
-        kwargs.setdefault('default', serialize_numpy)
-        self.json_kwargs = kwargs
-
-    def log(self, entry):
-        self.server_log.send_string(json.dumps(entry, **self.json_kwargs))
-        assert self.server_log.recv() == LOG_ACK
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    def close(self):
-        if not self.closed:
-            self.server_log.send(LOG_DONE)
-            assert self.server_log.recv() == LOG_DONE
-            self.closed = True
-
-    def __del__(self):
-        self.close()
