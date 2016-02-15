@@ -6,9 +6,8 @@ also the documentation of :func:`recv`.
 
 """
 import zmq
-from zmq.utils.jsonapi import jsonmod as json
 
-from .serialization import deserialize_numpy
+from .serialization import loads
 
 
 def get_snapshot(host='localhost', port=5556, ctx=None, **kwargs):
@@ -94,9 +93,8 @@ def recv(s, **kwargs):
         deserialization of NumPy arrays and scalars.
 
     """
-    kwargs.setdefault('object_hook', deserialize_numpy)
     sequence = int(s.recv())
-    entry = json.loads(s.recv_string(), **kwargs)
+    entry = loads(s.recv_string(), **kwargs)
     return sequence, entry
 
 

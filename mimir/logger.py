@@ -1,14 +1,13 @@
 """The logger object and user-friendly interface for constructing it."""
-import codecs
-import gzip
 import io
 import os
 from collections import deque, Sequence
 
 from zmq.utils.jsonapi import jsonmod as json
 
+from . import utils
 from .formatters import simple_formatter
-from .serialization import serialize_numpy, deserialize_numpy
+from .serialization import serialize_numpy, loads
 from .handlers import (GzipJSONHandler, JSONHandler, PrintHandler,
                        PersistentServerHandler, ServerHandler)
 
@@ -143,23 +142,13 @@ class _Logger(Sequence):
         """
         entries = deque([], maxlen=self._entries.maxlen)
 
-        def process(f, entries):
-            num_entries = 0
-            for line in f:
-                entries.append(line)
+        num_entries = 0
+        with utils.open(filename, raw_text=True) as f:
+            for entry in f:
                 num_entries += 1
-            return num_entries
-
-        root, ext = os.path.splitext(filename)
-        if ext == '.gz':
-            with codecs.getreader('utf-8')(gzip.open(filename)) as f:
-                num_entries = process(f, entries)
-        else:
-            with io.open(filename) as f:
-                num_entries = process(f, entries)
-        kwargs.setdefault('object_hook', deserialize_numpy)
+                entries.append(entry)
         for entry in entries:
-            self._entries.append(json.loads(entry, **kwargs))
+            self._entries.append(loads(entry, **kwargs))
         return num_entries
 
     def log(self, entry):

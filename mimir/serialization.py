@@ -2,6 +2,7 @@ import base64
 
 import numpy
 from numpy.lib.format import header_data_from_array_1_0
+from zmq.utils.jsonapi import jsonmod as json
 
 
 def serialize_numpy(obj):
@@ -36,3 +37,9 @@ def deserialize_numpy(dct):
             obj.shape = dct['shape']
         return obj
     return dct
+
+
+def loads(entry, **kwargs):
+    """Wrapper of ``json.loads`` with sensible defaults"""
+    kwargs.setdefault('object_hook', deserialize_numpy)
+    return json.loads(entry, **kwargs)
