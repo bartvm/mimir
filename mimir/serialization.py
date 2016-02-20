@@ -1,8 +1,8 @@
 import base64
 
 import numpy
+import simplejson as json
 from numpy.lib.format import header_data_from_array_1_0
-from zmq.utils.jsonapi import jsonmod as json
 
 
 def serialize_numpy(obj):

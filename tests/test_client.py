@@ -1,5 +1,5 @@
+import simplejson as json
 import zmq
-from zmq.utils.jsonapi import jsonmod as json
 
 ctx = zmq.Context()
 subscriber = ctx.socket(zmq.SUB)

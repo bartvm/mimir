@@ -1,7 +1,7 @@
 import threading
 
+import simplejson as json
 import zmq
-from zmq.utils.jsonapi import jsonmod as json
 
 from .logger import Logger, LOG_READY, LOG_ACK, LOG_DONE
 from .serialization import loads, serialize_numpy

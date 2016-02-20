@@ -31,7 +31,7 @@ setup(
     keywords='logging machine learning',
     packages=['mimir'],
     setup_requires=['Cython'],
-    install_requires=['pyzmq', 'six'],
+    install_requires=['pyzmq', 'six', 'simplejson'],
     ext_modules=cythonize([
         Extension("mimir.gzlog", ["gzlog/gzlog.pyx"],
                   libraries=['z'])

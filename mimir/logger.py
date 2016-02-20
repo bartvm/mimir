@@ -3,7 +3,7 @@ import io
 import os
 from collections import deque, Sequence
 
-from zmq.utils.jsonapi import jsonmod as json
+import simplejson as json
 
 from . import utils
 from .formatters import simple_formatter
