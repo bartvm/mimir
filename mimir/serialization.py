@@ -13,6 +13,9 @@ def serialize_numpy(obj):
     ``numpy.float32`` will be deserialized as a ``float``.
 
     """
+    if (isinstance(obj, numpy.generic) or
+            (isinstance(obj, numpy.ndarray) and obj.ndim == 0)):
+        return obj.item()
     if isinstance(obj, numpy.ndarray):
         if not obj.flags.c_contiguous and not obj.flags.f_contiguous:
             obj = numpy.ascontiguousarray(obj)
@@ -20,8 +23,6 @@ def serialize_numpy(obj):
         data = base64.b64encode(obj.data)
         dct['__ndarray__'] = data
         return dct
-    if isinstance(obj, numpy.generic):
-        return obj.item()
     raise TypeError
 
 
