@@ -11,10 +11,6 @@ from .serialization import serialize_numpy, loads
 from .handlers import (GzipJSONHandler, JSONHandler, PrintHandler,
                        PersistentServerHandler, ServerHandler)
 
-LOG_READY = b"\x01"
-LOG_ACK = b"\x02"
-LOG_DONE = b"\x03"
-
 
 def Logger(filename=None, maxlen=0, stream=False, stream_maxlen=0,
            formatter=simple_formatter, push_port=5557, router_port=5556,

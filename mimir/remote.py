@@ -3,8 +3,12 @@ import threading
 import simplejson as json
 import zmq
 
-from .logger import Logger, LOG_READY, LOG_ACK, LOG_DONE
+from .logger import Logger
 from .serialization import loads, serialize_numpy
+
+LOG_READY = b"\x01"
+LOG_ACK = b"\x02"
+LOG_DONE = b"\x03"
 
 
 def _server_logger(port, loads_kwargs, *args, **kwargs):
