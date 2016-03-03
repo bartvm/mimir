@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import io
 from setuptools import setup, Extension
-from Cython.Build import cythonize
 
 
 def readme():
@@ -32,9 +31,7 @@ setup(
     packages=['mimir'],
     setup_requires=['Cython'],
     install_requires=['pyzmq', 'six', 'simplejson'],
-    ext_modules=cythonize([
-        Extension("mimir.gzlog", ["gzlog/gzlog.pyx"],
-                  libraries=['z'])
-    ]),
+    ext_modules=[Extension("mimir.gzlog", ["gzlog/gzlog.pyx"],
+                           libraries=['z'])],
     zip_safe=False
 )
