@@ -17,7 +17,7 @@ def serialize_numpy(obj):
             (isinstance(obj, numpy.ndarray) and obj.ndim == 0)):
         return obj.item()
     if isinstance(obj, numpy.ndarray):
-        if not obj.flags.c_contiguous and not obj.flags.f_contiguous:
+        if not obj.flags.c_contiguous:
             obj = numpy.ascontiguousarray(obj)
         dct = header_data_from_array_1_0(obj)
         data = base64.b64encode(obj.data)
