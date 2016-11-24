@@ -112,7 +112,8 @@ clients to receive past log entries as well, there is a
         time.sleep(1)
 
 To see a live plot of your log, open up a Jupyter notebook and type the
-following (requires Bokeh). It will plot the last 50 datapoints, and
+following. Note that this requires a Bokeh server to be running (start it using
+the command ``bokeh serve``). It will plot the last 50 datapoints, and
 then live plot every entry as it comes in.
 
 .. code:: python
