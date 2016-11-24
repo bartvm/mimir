@@ -89,8 +89,7 @@ def update(x_key, y_key, init_sequence, subscriber, plot):
         # Mutating data source in place doesn't work
         x = plot.data_source.data['x'] + [entry[x_key]]
         y = plot.data_source.data['y'] + [entry[y_key]]
-        plot.data_source.data['x'] = x
-        plot.data_source.data['y'] = y
+        plot.data_source.data = dict(x=x, y=y)
 
 
 def serve_plot(x_key, y_key, **kwargs):
@@ -133,21 +132,17 @@ def notebook_plot(x_key, y_key, **kwargs):
 
     """
     subscriber, sequence, x, y = get_socket(x_key, y_key, **kwargs)
-    session = push_session(curdoc())
     output_notebook()
 
     fig = figure()
     plot = fig.line(x, y)
 
-    show(fig)
+    handle = show(fig, notebook_handle=True)
+    push_notebook(handle=handle)
 
-    def notebook_update():
+    while True:
         update(x_key, y_key, sequence, subscriber, plot)
-        push_notebook()
-
-    curdoc().add_periodic_callback(notebook_update, 50)
-
-    session.loop_until_closed()
+        push_notebook(handle=handle)
 
 if __name__ == "__main__":
     # Assuming a Bokeh server is running, this will create a live plot
