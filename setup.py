@@ -13,7 +13,7 @@ setup(
     description='A mini-framework for logging JSON-compatible objects',
     long_description=readme(),
     url='https://github.com/bartvm/mimir',
-    author='Bart van Merriënboer',
+    author=u'Bart van Merriënboer',
     author_email='bart.vanmerrienboer@gmail.com',
     license='MIT',
     classifiers=[
